@@ -89,13 +89,18 @@ The project has the following structure:
 
 ```bash
 caninecanaan/
-├── app.py                  # Flask application entry point
-├── populate_db.py          # Script to populate the database with fake data
-├── requirements.txt        # List of project dependencies
-├── .env                    # Environment variables for database credentials
-├── README.md               # This file
-├── LICENSE                 # Project license
-└── venv/                   # Virtual environment folder (generated after setup)
+├── .venv/                     # Virtual environment folder
+├── src/                       
+│   ├── tests/                 # Test cases for the Flask application
+│   │   └── test_api.py        # API test cases
+│   ├── utils/                 # Utility scripts
+│   │   └── populate_db_with_fake_data.py  # Script to populate the DB with fake data
+│   └── api.py                 # Flask application entry point (main API file)
+├── .env                       # Environment variables for database credentials
+├── .gitignore                 # List of files/folders to be ignored by Git
+├── LICENSE                    # Project license
+├── README.md                  # Project documentation
+└── requirements.txt           # List of project dependencies
 ```
 
 API Endpoints
