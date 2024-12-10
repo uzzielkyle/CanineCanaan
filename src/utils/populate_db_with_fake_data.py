@@ -4,19 +4,21 @@ import mysql.connector
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+load_dotenv(verbose=True, override=True)
 
 # CREDENTIALS
 HOSTNAME = os.getenv("HOSTNAME")
 USERNAME = os.getenv("USERNAME")
 PASSWORD = os.getenv("PASSWORD")
 DATABASE = os.getenv("DATABASE")
+PORT = os.getenv("PORT")
 
 db = mysql.connector.connect(
     host=HOSTNAME,
     user=USERNAME,
     password=PASSWORD,
-    database=DATABASE
+    database=DATABASE,
+    port=PORT
 )
 cursor = db.cursor()
 
