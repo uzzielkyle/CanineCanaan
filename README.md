@@ -79,7 +79,7 @@ Use the `utils/populate_db_with_fake_data.py` script to populate the database wi
 To populate the database, run:
 
 ```bash
-python populate_db.py
+python utils/populate_db_with_fake_data.py
 ```
 
 File Structure
