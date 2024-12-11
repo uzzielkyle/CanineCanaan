@@ -63,7 +63,7 @@ Make sure to replace with your actual database credentials.
 Start the Flask application with the following command:
 
 ```bash
-flask --app src/api.py run
+flask --app api.py run
 ```
 
 This will start the Flask development server, and you can access the API at `http://127.0.0.1:5000`.
@@ -79,7 +79,7 @@ Use the `utils/populate_db_with_fake_data.py` script to populate the database wi
 To populate the database, run:
 
 ```bash
-python src/utils/populate_db_with_fake_data.py
+python utils/populate_db_with_fake_data.py
 ```
 
 File Structure
