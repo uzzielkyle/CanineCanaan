@@ -42,6 +42,9 @@ def index():
     return "<p>Hello World!</p>"
 
 
+################
+### DOG CRUD ###
+################
 @app.route("/dogs", methods=["GET"])
 def get_dogs():
     try:
@@ -235,6 +238,223 @@ def delete_dog(id):
         return make_response(
             jsonify(
                 {"message": "dog deleted successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred.", "error": str(e)}
+            ),
+            500,
+        )
+
+
+################
+### VET CRUD ###
+################
+@app.route("/vets", methods=["GET"])
+def get_vets():
+    try:
+        data = data_fetch("""SELECT * FROM vet""")
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/vets/<int:id>", methods=["GET"])
+def get_vet(id):
+    try:
+        data = data_fetch("""SELECT * FROM vet WHERE id = %s""", (id,))
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+
+@app.route("/vets", methods=["POST"])
+def add_vet():
+    try:
+        info = request.get_json()
+        if not info:
+            return make_response(jsonify({"message": "Invalid JSON input"}), 400)
+
+        try:
+            firstname = info["firstname"]
+            lastname = info["lastname"]
+            email = info.get("email")
+            phone = info.get("phone")
+
+            if not (email or phone):
+                return make_response(jsonify({"message": "Either email or phone is required"}), 400)
+
+        except KeyError as e:
+            return make_response(jsonify({"message": f"Missing field: {str(e)}"}), 400)
+
+        cur = mysql.connection.cursor()
+        cur.execute(
+            """INSERT INTO vet (firstname, lastname, email, phone) VALUES (%s, %s, %s, %s)""",
+            (firstname, lastname, email, phone),
+        )
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        return make_response(
+            jsonify(
+                {"message": "vet added successfully",
+                    "rows_affected": rows_affected}
+            ),
+            201,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/vets/<int:id>", methods=["PUT"])
+def update_vet(id):
+    try:
+        info = request.get_json()
+
+        if not info or not isinstance(info, dict):
+            return make_response(
+                jsonify({"message": "Invalid JSON input"}), 400
+            )
+
+        fields = []
+        params = []
+        for field, value in info.items():
+            if field in {"firstname", "lastname", "email", "phone"}:
+                fields.append(f"{field} = %s")
+                params.append(value)
+
+        if not fields:
+            return make_response(
+                jsonify(
+                    {"message": "at least one field must be provided to update"}), 400
+            )
+
+        params.append(id)
+
+        query = f"UPDATE vet SET {', '.join(fields)} WHERE id = %s"
+
+        cur = mysql.connection.cursor()
+        cur.execute(query, tuple(params))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify({"message": f"no vet found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": "vet updated successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500,
+        )
+
+
+@app.route("/vets/<int:id>", methods=["DELETE"])
+def delete_vet(id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("""DELETE FROM vet WHERE id = %s""", (id,))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify({"message": f"no vet found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": "vet deleted successfully",
                     "rows_affected": rows_affected}
             ),
             200,
