@@ -721,5 +721,251 @@ def delete_health_record(id):
         )
 
 
+###################
+### LITTER CRUD ###
+###################
+@app.route("/litters", methods=["GET"])
+def get_litters():
+    try:
+        data = data_fetch(
+            """SELECT
+                    litter.id,
+                    litter.sire_id,
+                    sire.name as sire_name,
+                    sire.breed as sire_breed,
+                    litter.dam_id,
+                    dam.name as dam_name,
+                    dam.breed as dam_breed,
+                    litter.birthdate,
+                    litter.birthplace
+                FROM litter
+                JOIN dog sire ON sire.id = litter.sire_id
+                JOIN dog dam ON dam.id = litter.dam_id"""
+        )
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/litters/<int:id>", methods=["GET"])
+def get_litter(id):
+    try:
+        data = data_fetch(
+            """SELECT
+                    litter.id,
+                    litter.sire_id,
+                    sire.name as sire_name,
+                    sire.breed as sire_breed,
+                    litter.dam_id,
+                    dam.name as dam_name,
+                    dam.breed as dam_breed,
+                    litter.birthdate,
+                    litter.birthplace
+                FROM litter
+                JOIN dog sire ON sire.id = litter.sire_id
+                JOIN dog dam ON dam.id = litter.dam_id
+                WHERE litter.id = %s""", (id,))
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+
+@app.route("/litters", methods=["POST"])
+def add_litter():
+    try:
+        info = request.get_json()
+        if not info:
+            return make_response(
+                jsonify({"message": "Invalid JSON input"}), 400
+            )
+
+        try:
+            sire_id = info["sire_id"]
+            dam_id = info["dam_id"]
+            birthdate = info["birthdate"]
+            birthplace = info["birthplace"]
+
+        except KeyError as e:
+            return make_response(
+                jsonify({"message": f"Missing field: {str(e)}"}), 400
+            )
+
+        cur = mysql.connection.cursor()
+        cur.execute(
+            """INSERT INTO litter (sire_id, dam_id, birthdate, birthplace) VALUES (%s, %s, %s, %s)""",
+            (sire_id, dam_id, birthdate, birthplace),
+        )
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        return make_response(
+            jsonify(
+                {"message": "litter added successfully",
+                    "rows_affected": rows_affected}
+            ),
+            201,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/litters/<int:id>", methods=["PUT"])
+def update_litter(id):
+    try:
+        info = request.get_json()
+
+        if not info or not isinstance(info, dict):
+            return make_response(
+                jsonify({"message": "Invalid JSON input"}), 400
+            )
+
+        fields = []
+        params = []
+        for field, value in info.items():
+            if field in {"sire_id", "dam_id", "birthdate", "birthplace"}:
+                fields.append(f"{field} = %s")
+                params.append(value)
+
+        if not fields:
+            return make_response(
+                jsonify(
+                    {"message": "at least one field must be provided to update"}), 400
+            )
+
+        params.append(id)
+
+        query = f"UPDATE litter SET {', '.join(fields)} WHERE id = %s"
+
+        cur = mysql.connection.cursor()
+        cur.execute(query, tuple(params))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify({"message": f"no litter found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": "litter updated successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500,
+        )
+
+
+@app.route("/litters/<int:id>", methods=["DELETE"])
+def delete_litter(id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("""DELETE FROM litter WHERE id = %s""", (id,))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify({"message": f"no litter found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": "litter deleted successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred.", "error": str(e)}
+            ),
+            500,
+        )
+
+
 if __name__ == "__main__":
     app.run(debug=True)
