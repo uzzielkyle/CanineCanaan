@@ -494,7 +494,7 @@ def get_health_records():
                     health_record.vet_id,
                     CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet,
                     health_record.dog_id,
-                    dog.name AS dog_name,
+                    dog.name AS dog,
                     dog.breed
                 FROM health_record
                 JOIN dog ON health_record.dog_id = dog.id
@@ -534,7 +534,7 @@ def get_health_record(id):
                     health_record.vet_id,
                     CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet,
                     health_record.dog_id,
-                    dog.name AS dog_name,
+                    dog.name AS dog,
                     dog.breed
                 FROM health_record
                 JOIN dog ON health_record.dog_id = dog.id
