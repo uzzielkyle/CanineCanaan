@@ -967,5 +967,254 @@ def delete_litter(id):
         )
 
 
+###########################
+### HEALTH PROBLEM CRUD ###
+###########################
+@app.route("/health_problems", methods=["GET"])
+def get_health_problems():
+    try:
+        data = data_fetch(
+            """SELECT 
+                health_problem.id,
+                vet.id as vet_id,
+                CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet_name,
+                dog.id as dog_id,
+                dog.name as dog_name,
+                dog.breed as dog_breed,
+                health_problem.health_record_id,
+                health_problem.problem,
+                health_problem.date,
+                health_problem.treatment
+            FROM health_problem
+            JOIN health_record ON health_record.id = health_problem.health_record_id
+            JOIN vet ON health_record.vet_id = vet.id
+            JOIN dog ON health_record.dog_id = dog.id"""
+        )
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/health_problems/<int:id>", methods=["GET"])
+def get_health_problem(id):
+    try:
+        data = data_fetch(
+            """SELECT 
+                health_problem.id,
+                vet.id as vet_id,
+                CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet_name,
+                dog.id as dog_id,
+                dog.name as dog_name,
+                dog.breed as dog_breed,
+                health_problem.health_record_id,
+                health_problem.problem,
+                health_problem.date,
+                health_problem.treatment
+            FROM health_problem
+            JOIN health_record ON health_record.id = health_problem.health_record_id
+            JOIN vet ON health_record.vet_id = vet.id
+            JOIN dog ON health_record.dog_id = dog.id WHERE health_problem.id = %s""", (id,))
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+
+@app.route("/health_problems", methods=["POST"])
+def add_health_problem():
+    try:
+        info = request.get_json()
+        if not info:
+            return make_response(
+                jsonify({"message": "Invalid JSON input"}), 400
+            )
+
+        try:
+            health_record_id = info["health_record_id"]
+            problem = info["problem"]
+            date = info["date"]
+            treatment = info["treatment"]
+
+        except KeyError as e:
+            return make_response(
+                jsonify({"message": f"Missing field: {str(e)}"}), 400
+            )
+
+        cur = mysql.connection.cursor()
+        cur.execute(
+            """INSERT INTO health_problem (health_record_id, problem, date, treatment) VALUES (%s, %s, %s, %s)""",
+            (health_record_id, problem, date, treatment),
+        )
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        return make_response(
+            jsonify(
+                {"message": "health problem added successfully",
+                    "rows_affected": rows_affected}
+            ),
+            201,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/health_problems/<int:id>", methods=["PUT"])
+def update_health_problem(id):
+    try:
+        info = request.get_json()
+
+        if not info or not isinstance(info, dict):
+            return make_response(
+                jsonify({"message": "Invalid JSON input"}), 400
+            )
+
+        fields = []
+        params = []
+        for field, value in info.items():
+            if field in {"health_record_id", "problem", "date", "treatment"}:
+                fields.append(f"{field} = %s")
+                params.append(value)
+
+        if not fields:
+            return make_response(
+                jsonify(
+                    {"message": "at least one field must be provided to update"}), 400
+            )
+
+        params.append(id)
+
+        query = f"UPDATE health_problem SET {', '.join(fields)} WHERE id = %s"
+
+        cur = mysql.connection.cursor()
+        cur.execute(query, tuple(params))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify({"message": f"no health problem found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": "health problem updated successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500,
+        )
+
+
+@app.route("/health_problems/<int:id>", methods=["DELETE"])
+def delete_health_problem(id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("""DELETE FROM health_problem WHERE id = %s""", (id,))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify({"message": f"no health problem found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": "health problem deleted successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred.", "error": str(e)}
+            ),
+            500,
+        )
+
+
 if __name__ == "__main__":
     app.run(debug=True)
