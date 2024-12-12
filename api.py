@@ -496,7 +496,7 @@ def get_health_records():
                     health_record.dog_id,
                     dog.name AS dog_name,
                     dog.breed
-                FROM dog_breeding.health_record
+                FROM health_record
                 JOIN dog ON health_record.dog_id = dog.id
                 JOIN vet ON health_record.vet_id = vet.id"""
         )
@@ -536,7 +536,7 @@ def get_health_record(id):
                     health_record.dog_id,
                     dog.name AS dog_name,
                     dog.breed
-                FROM dog_breeding.health_record
+                FROM health_record
                 JOIN dog ON health_record.dog_id = dog.id
                 JOIN vet ON health_record.vet_id = vet.id
                 WHERE health_record.id = %s""", (id,)
