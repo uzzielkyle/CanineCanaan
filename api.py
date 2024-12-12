@@ -39,7 +39,12 @@ def data_fetch(query, params=None):
 
 @app.route("/")
 def index():
-    return "<p>Hello World!</p>"
+    return make_response(
+        jsonify(
+            {"message": "Welcome to Canine Canaan!"}
+        ),
+        200
+    )
 
 
 ################
