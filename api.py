@@ -1,4 +1,4 @@
-from flask import Flask, make_response, jsonify, request, redirect, url_for
+from flask import Flask, make_response, jsonify, request
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from flask_jwt_extended.exceptions import (
     NoAuthorizationError,
@@ -28,12 +28,31 @@ app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
 
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
-# app.config["JWT_TOKEN_LOCATION"] = ['headers']
 jwt = JWTManager(app)
 
 
+def data_fetch(query, params=None):
+    try:
+        cur = mysql.connection.cursor()
+
+        if params:
+            cur.execute(query, params)
+
+        else:
+            cur.execute(query)
+
+        data = cur.fetchall()
+        return data
+
+    except mysql.connection.Error as e:
+        raise
+
+    finally:
+        cur.close()
+
+
 #########################
-### JWT ERROR HANDLER ###
+### ERROR HANDLER ###
 #########################
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -80,24 +99,12 @@ def handle_user_claims_error(e):
     return make_response(jsonify({"message": "User claims verification failed. Please contact support."}), 401)
 
 
-def data_fetch(query, params=None):
-    try:
-        cur = mysql.connection.cursor()
-
-        if params:
-            cur.execute(query, params)
-
-        else:
-            cur.execute(query)
-
-        data = cur.fetchall()
-        return data
-
-    except mysql.connection.Error as e:
-        raise
-
-    finally:
-        cur.close()
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return make_response(
+        jsonify({"message": "Token has expired, please log in again."}),
+        401,
+    )
 
 
 @app.route("/")
@@ -217,14 +224,6 @@ def login():
             ),
             500,
         )
-
-
-@jwt.expired_token_loader
-def expired_token_callback(jwt_header, jwt_payload):
-    return make_response(
-        jsonify({"message": "Token has expired, please log in again."}),
-        401,
-    )
 
 
 @app.route("/protected", methods=["GET"])
