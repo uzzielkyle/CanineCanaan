@@ -11,6 +11,7 @@ from flask_jwt_extended.exceptions import (
     UserClaimsVerificationError
 )
 from flask_mysqldb import MySQL
+from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from datetime import timedelta
 import os
@@ -29,6 +30,8 @@ mysql = MySQL(app)
 
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
 jwt = JWTManager(app)
+
+bcrypt = Bcrypt(app)
 
 
 def data_fetch(query, params=None):
@@ -127,10 +130,13 @@ def register():
         return make_response(jsonify({"message": "email, password, and role are required"}), 400)
 
     try:
+        hashed_password = bcrypt.generate_password_hash(
+            password).decode('utf-8')
+
         cur = mysql.connection.cursor()
         cur.execute(
             """INSERT INTO user (email, password, role) VALUES (%s, %s, %s)""",
-            (email, password, role),
+            (email, hashed_password, role),
         )
         mysql.connection.commit()
         rows_affected = cur.rowcount
@@ -193,7 +199,7 @@ def login():
 
         user = result[0]
 
-        if not user["password"] == password:
+        if not bcrypt.check_password_hash(user["password"], password):
             return make_response(jsonify({"message": "invalid password"}), 401)
 
         access_token = create_access_token(
