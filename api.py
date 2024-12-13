@@ -241,7 +241,7 @@ def login():
 def logout():
     try:
         jti = get_jwt()["jti"]
-        expiration = datetime.utcnow(
+        expiration = datetime.now(
         ) + app.config["JWT_ACCESS_TOKEN_EXPIRES"]
 
         cur = mysql.connection.cursor()
