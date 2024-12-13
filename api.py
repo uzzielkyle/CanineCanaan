@@ -110,6 +110,65 @@ def index():
     )
 
 
+@app.route("/register", methods=["POST"])
+def register():
+    email = request.json.get("email", None)
+    password = request.json.get("password", None)
+    role = request.json.get("role", None)
+
+    if not email or not password or not role:
+        return make_response(jsonify({"message": "email, password, and role are required"}), 400)
+
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute(
+            """INSERT INTO user (email, password, role) VALUES (%s, %s, %s)""",
+            (email, password, role),
+        )
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        access_token = create_access_token(
+            identity=email,
+            additional_claims={"role": role},
+            expires_delta=timedelta(hours=1)
+        )
+
+        return make_response(
+            jsonify(
+                {
+                    "message": "account is registered successfully",
+                    "rows_affected": rows_affected,
+                    "access_token": access_token
+                }
+            ),
+            201,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
 @app.route("/login", methods=["POST"])
 def login():
     email = request.json.get("email", None)
