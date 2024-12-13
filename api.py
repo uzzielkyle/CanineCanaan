@@ -13,7 +13,7 @@ from flask_jwt_extended.exceptions import (
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
-from datetime import timedelta
+from datetime import timedelta, datetime
 import os
 
 load_dotenv(verbose=True, override=True)
@@ -29,6 +29,7 @@ app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
 
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
 
 bcrypt = Bcrypt(app)
@@ -54,9 +55,9 @@ def data_fetch(query, params=None):
         cur.close()
 
 
-#########################
+######################
 ### ERROR HANDLER ###
-#########################
+#####################
 @app.errorhandler(Exception)
 def handle_exception(e):
     return make_response(jsonify({"message": "An unexpected error occurred."}), 500)
@@ -120,6 +121,9 @@ def index():
     )
 
 
+############
+### AUTH ###
+############
 @app.route("/register", methods=["POST"])
 def register():
     email = request.json.get("email", None)
@@ -145,7 +149,7 @@ def register():
         access_token = create_access_token(
             identity=email,
             additional_claims={"role": role},
-            expires_delta=timedelta(hours=24)
+            expires_delta=app.config["JWT_ACCESS_TOKEN_EXPIRES"]
         )
 
         return make_response(
@@ -205,7 +209,7 @@ def login():
         access_token = create_access_token(
             identity=user["email"],
             additional_claims={"role": user["role"]},
-            expires_delta=timedelta(hours=24)
+            expires_delta=app.config["JWT_ACCESS_TOKEN_EXPIRES"]
         )
         return make_response(jsonify({"access_token": access_token}), 200)
 
@@ -230,6 +234,40 @@ def login():
             ),
             500,
         )
+
+
+@app.route("/logout", methods=["POST"])
+@jwt_required()
+def logout():
+    try:
+        jti = get_jwt()["jti"]
+        expiration = datetime.utcnow(
+        ) + app.config["JWT_ACCESS_TOKEN_EXPIRES"]
+
+        cur = mysql.connection.cursor()
+        cur.execute(
+            "INSERT INTO token_blacklist (jti, expiration) VALUES (%s, %s)",
+            (jti, expiration),
+        )
+        mysql.connection.commit()
+        cur.close()
+
+        return make_response(jsonify({"message": "successfully logged out"}), 200)
+    except Exception as e:
+        return make_response(jsonify({"message": "An error occurred during logout", "error": str(e)}), 500)
+
+
+@jwt.token_in_blocklist_loader
+def check_if_token_in_blacklist(jwt_header, jwt_payload):
+    try:
+        jti = jwt_payload["jti"]
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT 1 FROM token_blacklist WHERE jti = %s", (jti,))
+        result = cur.fetchone()
+        cur.close()
+        return result is not None
+    except Exception as e:
+        return False
 
 
 @app.route("/protected", methods=["GET"])
