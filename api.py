@@ -1,20 +1,25 @@
-from flask import Flask, make_response, jsonify, request
+from flask import Flask, make_response, jsonify, request, redirect, url_for
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from flask_mysqldb import MySQL
 from dotenv import load_dotenv
+from datetime import timedelta
 import os
 
 load_dotenv(verbose=True, override=True)
 
 app = Flask(__name__)
+
 app.config["MYSQL_HOST"] = os.getenv("HOSTNAME")
 app.config["MYSQL_USER"] = os.getenv("USERNAME")
 app.config["MYSQL_PASSWORD"] = os.getenv("PASSWORD")
 app.config["MYSQL_DB"] = os.getenv("DATABASE")
 app.config["MYSQL_PORT"] = int(os.getenv("PORT"))
-
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
-
 mysql = MySQL(app)
+
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
+# app.config["JWT_TOKEN_LOCATION"] = ['headers']
+jwt = JWTManager(app)
 
 
 def data_fetch(query, params=None):
@@ -47,10 +52,78 @@ def index():
     )
 
 
+@app.route("/login", methods=["POST"])
+def login():
+    email = request.json.get("email", None)
+    password = request.json.get("password", None)
+
+    if not email or not password:
+        return make_response(jsonify({"message": "email and password are required"}), 400)
+
+    try:
+        query = "SELECT * FROM user WHERE email = %s"
+        result = data_fetch(query, (email,))
+
+        if not result:
+            return make_response(jsonify({"message": "user not found"}), 404)
+
+        user = result[0]
+
+        if not user["password"] == password:
+            return make_response(jsonify({"message": "invalid password"}), 401)
+
+        access_token = create_access_token(
+            identity=user["email"],
+            additional_claims={"role": user["role"]},
+            expires_delta=timedelta(hours=1)
+        )
+        return make_response(jsonify({"access_token": access_token}), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return make_response(
+        jsonify({"message": "Token has expired, please log in again."}),
+        401,
+    )
+
+
+@app.route("/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    current_user = get_jwt_identity()
+    claims = get_jwt()
+    role = claims.get("role", None)
+    return make_response(jsonify({"logged_in_as": current_user, "role": role}), 200)
+
+
 ################
 ### DOG CRUD ###
 ################
 @app.route("/dogs", methods=["GET"])
+@jwt_required()
 def get_dogs():
     try:
         data = data_fetch("""SELECT * FROM dog""")
@@ -80,6 +153,7 @@ def get_dogs():
 
 
 @app.route("/dogs/<int:id>", methods=["GET"])
+@jwt_required()
 def get_dog(id):
     try:
         data = data_fetch("""SELECT * FROM dog WHERE id = %s""", (id,))
@@ -103,6 +177,7 @@ def get_dog(id):
 
 
 @app.route("/dogs", methods=["POST"])
+@jwt_required()
 def add_dog():
     try:
         info = request.get_json()
@@ -163,6 +238,7 @@ def add_dog():
 
 
 @app.route("/dogs/<int:id>", methods=["PUT"])
+@jwt_required()
 def update_dog(id):
     try:
         info = request.get_json()
@@ -227,6 +303,7 @@ def update_dog(id):
 
 
 @app.route("/dogs/<int:id>", methods=["DELETE"])
+@jwt_required()
 def delete_dog(id):
     try:
         cur = mysql.connection.cursor()
@@ -269,6 +346,7 @@ def delete_dog(id):
 ### VET CRUD ###
 ################
 @app.route("/vets", methods=["GET"])
+@jwt_required()
 def get_vets():
     try:
         data = data_fetch("""SELECT * FROM vet""")
@@ -298,6 +376,7 @@ def get_vets():
 
 
 @app.route("/vets/<int:id>", methods=["GET"])
+@jwt_required()
 def get_vet(id):
     try:
         data = data_fetch("""SELECT * FROM vet WHERE id = %s""", (id,))
@@ -321,6 +400,7 @@ def get_vet(id):
 
 
 @app.route("/vets", methods=["POST"])
+@jwt_required()
 def add_vet():
     try:
         info = request.get_json()
@@ -380,6 +460,7 @@ def add_vet():
 
 
 @app.route("/vets/<int:id>", methods=["PUT"])
+@jwt_required()
 def update_vet(id):
     try:
         info = request.get_json()
@@ -444,6 +525,7 @@ def update_vet(id):
 
 
 @app.route("/vets/<int:id>", methods=["DELETE"])
+@jwt_required()
 def delete_vet(id):
     try:
         cur = mysql.connection.cursor()
@@ -486,6 +568,7 @@ def delete_vet(id):
 ### HEALTH RECORD CRUD ###
 ##########################
 @app.route("/health_records", methods=["GET"])
+@jwt_required()
 def get_health_records():
     try:
         data = data_fetch(
@@ -526,6 +609,7 @@ def get_health_records():
 
 
 @app.route("/health_records/<int:id>", methods=["GET"])
+@jwt_required()
 def get_health_record(id):
     try:
         data = data_fetch(
@@ -561,6 +645,7 @@ def get_health_record(id):
 
 
 @app.route("/health_records", methods=["POST"])
+@jwt_required()
 def add_health_record():
     try:
         info = request.get_json()
@@ -619,6 +704,7 @@ def add_health_record():
 
 
 @app.route("/health_records/<int:id>", methods=["PUT"])
+@jwt_required()
 def update_health_record(id):
     try:
         info = request.get_json()
@@ -683,6 +769,7 @@ def update_health_record(id):
 
 
 @app.route("/health_records/<int:id>", methods=["DELETE"])
+@jwt_required()
 def delete_health_record(id):
     try:
         cur = mysql.connection.cursor()
@@ -725,6 +812,7 @@ def delete_health_record(id):
 ### LITTER CRUD ###
 ###################
 @app.route("/litters", methods=["GET"])
+@jwt_required()
 def get_litters():
     try:
         data = data_fetch(
@@ -768,6 +856,7 @@ def get_litters():
 
 
 @app.route("/litters/<int:id>", methods=["GET"])
+@jwt_required()
 def get_litter(id):
     try:
         data = data_fetch(
@@ -805,6 +894,7 @@ def get_litter(id):
 
 
 @app.route("/litters", methods=["POST"])
+@jwt_required()
 def add_litter():
     try:
         info = request.get_json()
@@ -865,6 +955,7 @@ def add_litter():
 
 
 @app.route("/litters/<int:id>", methods=["PUT"])
+@jwt_required()
 def update_litter(id):
     try:
         info = request.get_json()
@@ -929,6 +1020,7 @@ def update_litter(id):
 
 
 @app.route("/litters/<int:id>", methods=["DELETE"])
+@jwt_required()
 def delete_litter(id):
     try:
         cur = mysql.connection.cursor()
@@ -971,6 +1063,7 @@ def delete_litter(id):
 ### HEALTH PROBLEM CRUD ###
 ###########################
 @app.route("/health_problems", methods=["GET"])
+@jwt_required()
 def get_health_problems():
     try:
         data = data_fetch(
@@ -1016,6 +1109,7 @@ def get_health_problems():
 
 
 @app.route("/health_problems/<int:id>", methods=["GET"])
+@jwt_required()
 def get_health_problem(id):
     try:
         data = data_fetch(
@@ -1054,6 +1148,7 @@ def get_health_problem(id):
 
 
 @app.route("/health_problems", methods=["POST"])
+@jwt_required()
 def add_health_problem():
     try:
         info = request.get_json()
@@ -1114,6 +1209,7 @@ def add_health_problem():
 
 
 @app.route("/health_problems/<int:id>", methods=["PUT"])
+@jwt_required()
 def update_health_problem(id):
     try:
         info = request.get_json()
@@ -1178,6 +1274,7 @@ def update_health_problem(id):
 
 
 @app.route("/health_problems/<int:id>", methods=["DELETE"])
+@jwt_required()
 def delete_health_problem(id):
     try:
         cur = mysql.connection.cursor()
