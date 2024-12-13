@@ -1,3 +1,4 @@
+from flask_bcrypt import Bcrypt
 import random
 from faker import Faker
 import mysql.connector
@@ -5,6 +6,8 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv(verbose=True, override=True)
+
+bcrypt = Bcrypt()
 
 # CREDENTIALS
 HOSTNAME = os.getenv("HOSTNAME")
@@ -151,6 +154,25 @@ def populate_health_problem():
         "INSERT INTO health_problem (health_record_id, problem, date, treatment) VALUES (%s, %s, %s, %s)", problems)
 
 
+def populate_user():
+    users = [
+        ("buyer", "buyer", "buyer"),
+        ("breeder", "breeder", "breeder"),
+        ("vet", "vet", "vet"),
+        ("admin", "admin", "admin"),
+    ]
+
+    users_with_hashed_passwords = [
+        (email, bcrypt.generate_password_hash(password).decode('utf-8'), role)
+        for email, password, role in users
+    ]
+
+    cursor.executemany(
+        "INSERT INTO user (email, password, role) VALUES (%s, %s, %s)",
+        users_with_hashed_passwords
+    )
+
+
 try:
     db.start_transaction()
 
@@ -160,6 +182,7 @@ try:
     update_dog_litter_ids(dog_ids, litter_ids)
     populate_health_record(dog_ids, vet_ids)
     populate_health_problem()
+    populate_user()
 
     db.commit()
     print("Database populated successfully!")
