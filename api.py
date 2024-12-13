@@ -14,6 +14,7 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from datetime import timedelta, datetime
+from functools import wraps
 import os
 
 load_dotenv(verbose=True, override=True)
@@ -279,11 +280,28 @@ def protected():
     return make_response(jsonify({"logged_in_as": current_user, "role": role}), 200)
 
 
+def role_required(allowed_roles):
+    def wrapper(fn):
+        @wraps(fn)
+        @jwt_required()
+        def decorator(*args, **kwargs):
+            claims = get_jwt()
+            user_role = claims.get("role")
+
+            if user_role not in allowed_roles:
+                return jsonify({"message": "access forbidden: insufficient permissions"}), 403
+
+            return fn(*args, **kwargs)
+        return decorator
+    return wrapper
+
+
 ################
 ### DOG CRUD ###
 ################
 @app.route("/dogs", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "vet", "admin"])
 def get_dogs():
     try:
         data = data_fetch("""SELECT * FROM dog""")
@@ -314,6 +332,7 @@ def get_dogs():
 
 @app.route("/dogs/<int:id>", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "vet", "admin"])
 def get_dog(id):
     try:
         data = data_fetch("""SELECT * FROM dog WHERE id = %s""", (id,))
@@ -338,6 +357,7 @@ def get_dog(id):
 
 @app.route("/dogs", methods=["POST"])
 @jwt_required()
+@role_required(["admin", "breeder"])
 def add_dog():
     try:
         info = request.get_json()
@@ -399,6 +419,7 @@ def add_dog():
 
 @app.route("/dogs/<int:id>", methods=["PUT"])
 @jwt_required()
+@role_required(["admin", "breeder"])
 def update_dog(id):
     try:
         info = request.get_json()
@@ -464,6 +485,7 @@ def update_dog(id):
 
 @app.route("/dogs/<int:id>", methods=["DELETE"])
 @jwt_required()
+@role_required(["admin"])
 def delete_dog(id):
     try:
         cur = mysql.connection.cursor()
@@ -507,6 +529,7 @@ def delete_dog(id):
 ################
 @app.route("/vets", methods=["GET"])
 @jwt_required()
+@role_required(["breeder", "admin"])
 def get_vets():
     try:
         data = data_fetch("""SELECT * FROM vet""")
@@ -537,6 +560,7 @@ def get_vets():
 
 @app.route("/vets/<int:id>", methods=["GET"])
 @jwt_required()
+@role_required(["breeder", "admin"])
 def get_vet(id):
     try:
         data = data_fetch("""SELECT * FROM vet WHERE id = %s""", (id,))
@@ -561,6 +585,7 @@ def get_vet(id):
 
 @app.route("/vets", methods=["POST"])
 @jwt_required()
+@role_required(["admin"])
 def add_vet():
     try:
         info = request.get_json()
@@ -621,6 +646,7 @@ def add_vet():
 
 @app.route("/vets/<int:id>", methods=["PUT"])
 @jwt_required()
+@role_required(["admin"])
 def update_vet(id):
     try:
         info = request.get_json()
@@ -686,6 +712,7 @@ def update_vet(id):
 
 @app.route("/vets/<int:id>", methods=["DELETE"])
 @jwt_required()
+@role_required(["admin"])
 def delete_vet(id):
     try:
         cur = mysql.connection.cursor()
@@ -729,6 +756,7 @@ def delete_vet(id):
 ##########################
 @app.route("/health_records", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_records():
     try:
         data = data_fetch(
@@ -770,6 +798,7 @@ def get_health_records():
 
 @app.route("/health_records/<int:id>", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_record(id):
     try:
         data = data_fetch(
@@ -806,6 +835,7 @@ def get_health_record(id):
 
 @app.route("/health_records", methods=["POST"])
 @jwt_required()
+@role_required(["breeder", "vet", "admin"])
 def add_health_record():
     try:
         info = request.get_json()
@@ -865,6 +895,7 @@ def add_health_record():
 
 @app.route("/health_records/<int:id>", methods=["PUT"])
 @jwt_required()
+@role_required(["breeder", "vet", "admin"])
 def update_health_record(id):
     try:
         info = request.get_json()
@@ -930,6 +961,7 @@ def update_health_record(id):
 
 @app.route("/health_records/<int:id>", methods=["DELETE"])
 @jwt_required()
+@role_required(["admin"])
 def delete_health_record(id):
     try:
         cur = mysql.connection.cursor()
@@ -973,6 +1005,7 @@ def delete_health_record(id):
 ###################
 @app.route("/litters", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "admin"])
 def get_litters():
     try:
         data = data_fetch(
@@ -1017,6 +1050,7 @@ def get_litters():
 
 @app.route("/litters/<int:id>", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "admin"])
 def get_litter(id):
     try:
         data = data_fetch(
@@ -1055,6 +1089,7 @@ def get_litter(id):
 
 @app.route("/litters", methods=["POST"])
 @jwt_required()
+@role_required(["breeder", "admin"])
 def add_litter():
     try:
         info = request.get_json()
@@ -1116,6 +1151,7 @@ def add_litter():
 
 @app.route("/litters/<int:id>", methods=["PUT"])
 @jwt_required()
+@role_required(["breeder", "admin"])
 def update_litter(id):
     try:
         info = request.get_json()
@@ -1181,6 +1217,7 @@ def update_litter(id):
 
 @app.route("/litters/<int:id>", methods=["DELETE"])
 @jwt_required()
+@role_required(["admin"])
 def delete_litter(id):
     try:
         cur = mysql.connection.cursor()
@@ -1224,6 +1261,7 @@ def delete_litter(id):
 ###########################
 @app.route("/health_problems", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_problems():
     try:
         data = data_fetch(
@@ -1270,6 +1308,7 @@ def get_health_problems():
 
 @app.route("/health_problems/<int:id>", methods=["GET"])
 @jwt_required()
+@role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_problem(id):
     try:
         data = data_fetch(
@@ -1309,6 +1348,7 @@ def get_health_problem(id):
 
 @app.route("/health_problems", methods=["POST"])
 @jwt_required()
+@role_required(["vet", "admin"])
 def add_health_problem():
     try:
         info = request.get_json()
@@ -1370,6 +1410,7 @@ def add_health_problem():
 
 @app.route("/health_problems/<int:id>", methods=["PUT"])
 @jwt_required()
+@role_required(["vet", "admin"])
 def update_health_problem(id):
     try:
         info = request.get_json()
@@ -1435,6 +1476,7 @@ def update_health_problem(id):
 
 @app.route("/health_problems/<int:id>", methods=["DELETE"])
 @jwt_required()
+@role_required(["admin"])
 def delete_health_problem(id):
     try:
         cur = mysql.connection.cursor()
