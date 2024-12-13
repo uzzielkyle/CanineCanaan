@@ -132,7 +132,7 @@ def register():
         access_token = create_access_token(
             identity=email,
             additional_claims={"role": role},
-            expires_delta=timedelta(hours=1)
+            expires_delta=timedelta(hours=24)
         )
 
         return make_response(
@@ -192,7 +192,7 @@ def login():
         access_token = create_access_token(
             identity=user["email"],
             additional_claims={"role": user["role"]},
-            expires_delta=timedelta(hours=1)
+            expires_delta=timedelta(hours=24)
         )
         return make_response(jsonify({"access_token": access_token}), 200)
 
