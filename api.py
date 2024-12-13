@@ -1,5 +1,15 @@
 from flask import Flask, make_response, jsonify, request, redirect, url_for
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended.exceptions import (
+    NoAuthorizationError,
+    InvalidHeaderError,
+    JWTDecodeError,
+    RevokedTokenError,
+    WrongTokenError,
+    FreshTokenRequired,
+    UserLookupError,
+    UserClaimsVerificationError
+)
 from flask_mysqldb import MySQL
 from dotenv import load_dotenv
 from datetime import timedelta
@@ -20,6 +30,54 @@ mysql = MySQL(app)
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
 # app.config["JWT_TOKEN_LOCATION"] = ['headers']
 jwt = JWTManager(app)
+
+
+#########################
+### JWT ERROR HANDLER ###
+#########################
+@app.errorhandler(Exception)
+def handle_exception(e):
+    return make_response(jsonify({"message": "An unexpected error occurred."}), 500)
+
+
+@app.errorhandler(NoAuthorizationError)
+def handle_no_authorization_error(e):
+    return make_response(jsonify({"message": "Authorization token is missing. Please include it in the header."}), 401)
+
+
+@app.errorhandler(InvalidHeaderError)
+def handle_invalid_header_error(e):
+    return make_response(jsonify({"message": "Invalid authorization header format. Ensure it's in the form 'Bearer <token>'."}), 401)
+
+
+@app.errorhandler(JWTDecodeError)
+def handle_jwt_decode_error(e):
+    return make_response(jsonify({"message": "Error decoding token. The token may be malformed."}), 401)
+
+
+@app.errorhandler(RevokedTokenError)
+def handle_revoked_token_error(e):
+    return make_response(jsonify({"message": "Token has been revoked. Please log in again."}), 401)
+
+
+@app.errorhandler(WrongTokenError)
+def handle_wrong_token_error(e):
+    return make_response(jsonify({"message": "Wrong token type used. Ensure you're using the correct token type."}), 401)
+
+
+@app.errorhandler(FreshTokenRequired)
+def handle_fresh_token_required_error(e):
+    return make_response(jsonify({"message": "Fresh token is required to access this resource."}), 401)
+
+
+@app.errorhandler(UserLookupError)
+def handle_user_lookup_error(e):
+    return make_response(jsonify({"message": "User not found. Please verify your credentials."}), 404)
+
+
+@app.errorhandler(UserClaimsVerificationError)
+def handle_user_claims_error(e):
+    return make_response(jsonify({"message": "User claims verification failed. Please contact support."}), 401)
 
 
 def data_fetch(query, params=None):
