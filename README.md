@@ -54,6 +54,7 @@ HOSTNAME=localhost
 USERNAME=your_username
 PASSWORD=your_password
 DATABASE=caninecanaan
+PORT=3306
 ```
 
 Make sure to replace with your actual database credentials.
