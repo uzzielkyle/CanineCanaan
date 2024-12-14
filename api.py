@@ -56,6 +56,227 @@ def data_fetch(query, params=None):
         cur.close()
 
 
+def get_entities(query):
+    try:
+        data = data_fetch(query=query)
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+def get_entity(query, id):
+    try:
+        data = data_fetch(query=query, params=(id,))
+        return make_response(jsonify(data), 200)
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred", "error": str(e)}
+            ),
+            500
+        )
+
+
+def add_entity(request, entity, required_fields, optional_fields=None):
+    optional_fields = optional_fields or []
+
+    try:
+        info = request.get_json()
+        if not info:
+            return make_response(jsonify({"message": "invalid JSON input"}), 400)
+
+        missing_fields = [
+            field for field in required_fields if field not in info]
+        if missing_fields:
+            return make_response(
+                jsonify(
+                    {"message": f"missing required fields: {', '.join(missing_fields)}"}), 400
+            )
+
+        values = {field: info[field] for field in required_fields}
+        for field in optional_fields:
+            values[field] = info.get(field)
+
+        fields = required_fields + optional_fields
+        placeholders = ", ".join(["%s"] * len(fields))
+        columns = ", ".join(fields)
+        query = f"INSERT INTO {entity} ({columns}) VALUES ({placeholders})"
+
+        cur = mysql.connection.cursor()
+        cur.execute(query, [values[field] for field in fields])
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        return make_response(
+            jsonify(
+                {
+                    "message": f"{' '.join(str(entity).split('_'))} entry added successfully",
+                    "rows_affected": rows_affected,
+                }
+            ),
+            201,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "A database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "An unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+def update_entity(request, entity, allowed_fields, id):
+    try:
+        info = request.get_json()
+        if not info or not isinstance(info, dict):
+            return make_response(jsonify({"message": "Invalid JSON input"}), 400)
+
+        fields = []
+        params = []
+        for field, value in info.items():
+            if field in allowed_fields:
+                fields.append(f"{field} = %s")
+                params.append(value)
+
+        if not fields:
+            return make_response(
+                jsonify(
+                    {"message": "at least one valid field must be provided to update"}), 400
+            )
+
+        params.append(id)
+
+        query = f"UPDATE {entity} SET {', '.join(fields)} WHERE id = %s"
+
+        cur = mysql.connection.cursor()
+        cur.execute(query, tuple(params))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify(
+                    {"message": f"no {' '.join(str(entity).split('_'))} entry found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {
+                    "message": f"{' '.join(str(entity).split('_'))} entry updated successfully",
+                    "rows_affected": rows_affected,
+                }
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "a database error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {
+                    "message": "an unexpected error occurred",
+                    "error": str(e),
+                }
+            ),
+            500,
+        )
+
+
+def delete_entity(entity, id):
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute(f"""DELETE FROM {entity} WHERE id = %s""", (id,))
+        mysql.connection.commit()
+        rows_affected = cur.rowcount
+        cur.close()
+
+        if rows_affected == 0:
+            return make_response(
+                jsonify(
+                    {"message": f"no {' '.join(str(entity).split('_'))} found with ID {id}"}), 404
+            )
+
+        return make_response(
+            jsonify(
+                {"message": f"{' '.join(str(entity).split('_'))} deleted successfully",
+                    "rows_affected": rows_affected}
+            ),
+            200,
+        )
+
+    except mysql.connection.Error as e:
+        return make_response(
+            jsonify(
+                {"message": "database error occurred",
+                    "error": str(e)}
+            ),
+            500,
+        )
+    except Exception as e:
+        return make_response(
+            jsonify(
+                {"message": "an unexpected error occurred.", "error": str(e)}
+            ),
+            500,
+        )
+
+
 ######################
 ### ERROR HANDLER ###
 #####################
@@ -303,225 +524,53 @@ def role_required(allowed_roles):
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
 def get_dogs():
-    try:
-        data = data_fetch("""SELECT * FROM dog""")
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = get_entities(query="""SELECT * FROM dog""")
+    return response
 
 
 @app.route("/dogs/<int:id>", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
 def get_dog(id):
-    try:
-        data = data_fetch("""SELECT * FROM dog WHERE id = %s""", (id,))
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred", "error": str(e)}
-            ),
-            500
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500
-        )
+    response = get_entity(
+        query="""SELECT * FROM dog WHERE id = %s""",
+        id=id
+    )
+    return response
 
 
 @app.route("/dogs", methods=["POST"])
 @jwt_required()
 @role_required(["admin", "breeder"])
 def add_dog():
-    try:
-        info = request.get_json()
-        if not info:
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        try:
-            name = info["name"]
-            litter_id = info["litter_id"]
-            gender = info["gender"]
-            breed = info["breed"]
-
-        except KeyError as e:
-            return make_response(
-                jsonify({"message": f"Missing field: {str(e)}"}), 400
-            )
-
-        cur = mysql.connection.cursor()
-        cur.execute(
-            """INSERT INTO dog (name, litter_id, gender, breed) VALUES (%s, %s, %s, %s)""",
-            (name, litter_id, gender, breed),
-        )
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        return make_response(
-            jsonify(
-                {"message": "dog added successfully",
-                    "rows_affected": rows_affected}
-            ),
-            201,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = add_entity(
+        request=request,
+        entity="dog",
+        required_fields=["name", "gender", "breed"],
+        optional_fields=["litter_id"]
+    )
+    return response
 
 
 @app.route("/dogs/<int:id>", methods=["PUT"])
 @jwt_required()
 @role_required(["admin", "breeder"])
 def update_dog(id):
-    try:
-        info = request.get_json()
-
-        if not info or not isinstance(info, dict):
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        fields = []
-        params = []
-        for field, value in info.items():
-            if field in {"name", "litter_id", "gender", "breed"}:
-                fields.append(f"{field} = %s")
-                params.append(value)
-
-        if not fields:
-            return make_response(
-                jsonify(
-                    {"message": "at least one field must be provided to update"}), 400
-            )
-
-        params.append(id)
-
-        query = f"UPDATE dog SET {', '.join(fields)} WHERE id = %s"
-
-        cur = mysql.connection.cursor()
-        cur.execute(query, tuple(params))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no dog found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "dog updated successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500,
-        )
+    response = update_entity(
+        request=request,
+        entity="dog",
+        allowed_fields={"name", "litter_id", "gender", "breed"},
+        id=id
+    )
+    return response
 
 
 @app.route("/dogs/<int:id>", methods=["DELETE"])
 @jwt_required()
 @role_required(["admin"])
 def delete_dog(id):
-    try:
-        cur = mysql.connection.cursor()
-        cur.execute("""DELETE FROM dog WHERE id = %s""", (id,))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no dog found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "dog deleted successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred.", "error": str(e)}
-            ),
-            500,
-        )
+    response = delete_entity(entity="dog", id=id)
+    return response
 
 
 ################
@@ -531,224 +580,53 @@ def delete_dog(id):
 @jwt_required()
 @role_required(["breeder", "admin"])
 def get_vets():
-    try:
-        data = data_fetch("""SELECT * FROM vet""")
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = get_entities(query="""SELECT * FROM vet""")
+    return response
 
 
 @app.route("/vets/<int:id>", methods=["GET"])
 @jwt_required()
 @role_required(["breeder", "admin"])
 def get_vet(id):
-    try:
-        data = data_fetch("""SELECT * FROM vet WHERE id = %s""", (id,))
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred", "error": str(e)}
-            ),
-            500
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500
-        )
+    response = get_entity(
+        query="""SELECT * FROM vet WHERE id = %s""",
+        id=id
+    )
+    return response
 
 
 @app.route("/vets", methods=["POST"])
 @jwt_required()
 @role_required(["admin"])
 def add_vet():
-    try:
-        info = request.get_json()
-        if not info:
-            return make_response(jsonify({"message": "Invalid JSON input"}), 400)
-
-        try:
-            firstname = info["firstname"]
-            lastname = info["lastname"]
-            email = info.get("email")
-            phone = info.get("phone")
-
-            if not (email or phone):
-                return make_response(jsonify({"message": "Either email or phone is required"}), 400)
-
-        except KeyError as e:
-            return make_response(jsonify({"message": f"Missing field: {str(e)}"}), 400)
-
-        cur = mysql.connection.cursor()
-        cur.execute(
-            """INSERT INTO vet (firstname, lastname, email, phone) VALUES (%s, %s, %s, %s)""",
-            (firstname, lastname, email, phone),
-        )
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        return make_response(
-            jsonify(
-                {"message": "vet added successfully",
-                    "rows_affected": rows_affected}
-            ),
-            201,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = add_entity(
+        request=request,
+        entity="vet",
+        required_fields=["firstname", "lastname"],
+        optional_fields=["email", "phone"]
+    )
+    return response
 
 
 @app.route("/vets/<int:id>", methods=["PUT"])
 @jwt_required()
 @role_required(["admin"])
 def update_vet(id):
-    try:
-        info = request.get_json()
-
-        if not info or not isinstance(info, dict):
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        fields = []
-        params = []
-        for field, value in info.items():
-            if field in {"firstname", "lastname", "email", "phone"}:
-                fields.append(f"{field} = %s")
-                params.append(value)
-
-        if not fields:
-            return make_response(
-                jsonify(
-                    {"message": "at least one field must be provided to update"}), 400
-            )
-
-        params.append(id)
-
-        query = f"UPDATE vet SET {', '.join(fields)} WHERE id = %s"
-
-        cur = mysql.connection.cursor()
-        cur.execute(query, tuple(params))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no vet found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "vet updated successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500,
-        )
+    response = update_entity(
+        request=request,
+        entity="vet",
+        allowed_fields={"firstname", "lastname", "email", "phone"},
+        id=id
+    )
+    return response
 
 
 @app.route("/vets/<int:id>", methods=["DELETE"])
 @jwt_required()
 @role_required(["admin"])
 def delete_vet(id):
-    try:
-        cur = mysql.connection.cursor()
-        cur.execute("""DELETE FROM vet WHERE id = %s""", (id,))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no vet found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "vet deleted successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred.", "error": str(e)}
-            ),
-            500,
-        )
+    response = delete_entity(entity="vet", id=id)
+    return response
 
 
 ##########################
@@ -758,9 +636,8 @@ def delete_vet(id):
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_records():
-    try:
-        data = data_fetch(
-            """SELECT
+    response = get_entities(
+        query="""SELECT
                     health_record.id,
                     health_record.vet_id,
                     CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet,
@@ -770,39 +647,16 @@ def get_health_records():
                 FROM health_record
                 JOIN dog ON health_record.dog_id = dog.id
                 JOIN vet ON health_record.vet_id = vet.id"""
-        )
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    )
+    return response
 
 
 @app.route("/health_records/<int:id>", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_record(id):
-    try:
-        data = data_fetch(
-            """SELECT
+    response = get_entity(
+        query="""SELECT
                     health_record.id,
                     health_record.vet_id,
                     CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet,
@@ -812,192 +666,43 @@ def get_health_record(id):
                 FROM health_record
                 JOIN dog ON health_record.dog_id = dog.id
                 JOIN vet ON health_record.vet_id = vet.id
-                WHERE health_record.id = %s""", (id,)
-        )
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred", "error": str(e)}
-            ),
-            500
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500
-        )
+                WHERE health_record.id = %s""",
+        id=id
+    )
+    return response
 
 
 @app.route("/health_records", methods=["POST"])
 @jwt_required()
 @role_required(["breeder", "vet", "admin"])
 def add_health_record():
-    try:
-        info = request.get_json()
-        if not info:
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        try:
-            vet_id = info["vet_id"]
-            dog_id = info["dog_id"]
-
-        except KeyError as e:
-            return make_response(
-                jsonify({"message": f"Missing field: {str(e)}"}), 400
-            )
-
-        cur = mysql.connection.cursor()
-        cur.execute(
-            """INSERT INTO health_record (vet_id, dog_id) VALUES (%s, %s)""",
-            (vet_id, dog_id),
-        )
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        return make_response(
-            jsonify(
-                {"message": "health record added successfully",
-                    "rows_affected": rows_affected}
-            ),
-            201,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = add_entity(
+        request=request,
+        entity="health_record",
+        required_fields=["dog_id", "vet_id"],
+    )
+    return response
 
 
 @app.route("/health_records/<int:id>", methods=["PUT"])
 @jwt_required()
 @role_required(["breeder", "vet", "admin"])
 def update_health_record(id):
-    try:
-        info = request.get_json()
-
-        if not info or not isinstance(info, dict):
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        fields = []
-        params = []
-        for field, value in info.items():
-            if field in {"vet_id", "dog_id"}:
-                fields.append(f"{field} = %s")
-                params.append(value)
-
-        if not fields:
-            return make_response(
-                jsonify(
-                    {"message": "at least one field must be provided to update"}), 400
-            )
-
-        params.append(id)
-
-        query = f"UPDATE health_record SET {', '.join(fields)} WHERE id = %s"
-
-        cur = mysql.connection.cursor()
-        cur.execute(query, tuple(params))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no health record found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "health record updated successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500,
-        )
+    response = update_entity(
+        request=request,
+        entity="health_record",
+        allowed_fields={"vet_id", "dog_id"},
+        id=id
+    )
+    return response
 
 
 @app.route("/health_records/<int:id>", methods=["DELETE"])
 @jwt_required()
 @role_required(["admin"])
 def delete_health_record(id):
-    try:
-        cur = mysql.connection.cursor()
-        cur.execute("""DELETE FROM health_record WHERE id = %s""", (id,))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no health record found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "health record deleted successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred.", "error": str(e)}
-            ),
-            500,
-        )
+    response = delete_entity(entity="health_record", id=id)
+    return response
 
 
 ###################
@@ -1007,9 +712,8 @@ def delete_health_record(id):
 @jwt_required()
 @role_required(["buyer", "breeder", "admin"])
 def get_litters():
-    try:
-        data = data_fetch(
-            """SELECT
+    response = get_entities(
+        query="""SELECT
                     litter.id,
                     litter.sire_id,
                     sire.name as sire_name,
@@ -1022,39 +726,16 @@ def get_litters():
                 FROM litter
                 JOIN dog sire ON sire.id = litter.sire_id
                 JOIN dog dam ON dam.id = litter.dam_id"""
-        )
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    )
+    return response
 
 
 @app.route("/litters/<int:id>", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "admin"])
 def get_litter(id):
-    try:
-        data = data_fetch(
-            """SELECT
+    response = get_entity(
+        query="""SELECT
                     litter.id,
                     litter.sire_id,
                     sire.name as sire_name,
@@ -1067,193 +748,43 @@ def get_litter(id):
                 FROM litter
                 JOIN dog sire ON sire.id = litter.sire_id
                 JOIN dog dam ON dam.id = litter.dam_id
-                WHERE litter.id = %s""", (id,))
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred", "error": str(e)}
-            ),
-            500
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500
-        )
+                WHERE litter.id = %s""",
+        id=id
+    )
+    return response
 
 
 @app.route("/litters", methods=["POST"])
 @jwt_required()
 @role_required(["breeder", "admin"])
 def add_litter():
-    try:
-        info = request.get_json()
-        if not info:
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        try:
-            sire_id = info["sire_id"]
-            dam_id = info["dam_id"]
-            birthdate = info["birthdate"]
-            birthplace = info["birthplace"]
-
-        except KeyError as e:
-            return make_response(
-                jsonify({"message": f"Missing field: {str(e)}"}), 400
-            )
-
-        cur = mysql.connection.cursor()
-        cur.execute(
-            """INSERT INTO litter (sire_id, dam_id, birthdate, birthplace) VALUES (%s, %s, %s, %s)""",
-            (sire_id, dam_id, birthdate, birthplace),
-        )
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        return make_response(
-            jsonify(
-                {"message": "litter added successfully",
-                    "rows_affected": rows_affected}
-            ),
-            201,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = add_entity(
+        request=request,
+        entity="litter",
+        required_fields=["sire_id", "dam_id", "birthdate", "birthplace"]
+    )
+    return response
 
 
 @app.route("/litters/<int:id>", methods=["PUT"])
 @jwt_required()
 @role_required(["breeder", "admin"])
 def update_litter(id):
-    try:
-        info = request.get_json()
-
-        if not info or not isinstance(info, dict):
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        fields = []
-        params = []
-        for field, value in info.items():
-            if field in {"sire_id", "dam_id", "birthdate", "birthplace"}:
-                fields.append(f"{field} = %s")
-                params.append(value)
-
-        if not fields:
-            return make_response(
-                jsonify(
-                    {"message": "at least one field must be provided to update"}), 400
-            )
-
-        params.append(id)
-
-        query = f"UPDATE litter SET {', '.join(fields)} WHERE id = %s"
-
-        cur = mysql.connection.cursor()
-        cur.execute(query, tuple(params))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no litter found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "litter updated successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500,
-        )
+    response = update_entity(
+        request=request,
+        entity="litter",
+        allowed_fields={"sire_id", "dam_id", "birthdate", "birthplace"},
+        id=id
+    )
+    return response
 
 
 @app.route("/litters/<int:id>", methods=["DELETE"])
 @jwt_required()
 @role_required(["admin"])
 def delete_litter(id):
-    try:
-        cur = mysql.connection.cursor()
-        cur.execute("""DELETE FROM litter WHERE id = %s""", (id,))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no litter found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "litter deleted successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred.", "error": str(e)}
-            ),
-            500,
-        )
+    response = delete_entity(entity="litter", id=id)
+    return response
 
 
 ###########################
@@ -1263,9 +794,8 @@ def delete_litter(id):
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_problems():
-    try:
-        data = data_fetch(
-            """SELECT 
+    response = get_entities(
+        query="""SELECT 
                 health_problem.id,
                 vet.id as vet_id,
                 CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet_name,
@@ -1280,39 +810,16 @@ def get_health_problems():
             JOIN health_record ON health_record.id = health_problem.health_record_id
             JOIN vet ON health_record.vet_id = vet.id
             JOIN dog ON health_record.dog_id = dog.id"""
-        )
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    )
+    return response
 
 
 @app.route("/health_problems/<int:id>", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
 def get_health_problem(id):
-    try:
-        data = data_fetch(
-            """SELECT 
+    response = get_entity(
+        query="""SELECT 
                 health_problem.id,
                 vet.id as vet_id,
                 CONCAT_WS(' ', vet.firstname, vet.lastname) AS vet_name,
@@ -1326,193 +833,44 @@ def get_health_problem(id):
             FROM health_problem
             JOIN health_record ON health_record.id = health_problem.health_record_id
             JOIN vet ON health_record.vet_id = vet.id
-            JOIN dog ON health_record.dog_id = dog.id WHERE health_problem.id = %s""", (id,))
-        return make_response(jsonify(data), 200)
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred", "error": str(e)}
-            ),
-            500
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500
-        )
+            JOIN dog ON health_record.dog_id = dog.id WHERE health_problem.id = %s""",
+        id=id
+    )
+    return response
 
 
 @app.route("/health_problems", methods=["POST"])
 @jwt_required()
 @role_required(["vet", "admin"])
 def add_health_problem():
-    try:
-        info = request.get_json()
-        if not info:
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        try:
-            health_record_id = info["health_record_id"]
-            problem = info["problem"]
-            date = info["date"]
-            treatment = info["treatment"]
-
-        except KeyError as e:
-            return make_response(
-                jsonify({"message": f"Missing field: {str(e)}"}), 400
-            )
-
-        cur = mysql.connection.cursor()
-        cur.execute(
-            """INSERT INTO health_problem (health_record_id, problem, date, treatment) VALUES (%s, %s, %s, %s)""",
-            (health_record_id, problem, date, treatment),
-        )
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        return make_response(
-            jsonify(
-                {"message": "health problem added successfully",
-                    "rows_affected": rows_affected}
-            ),
-            201,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
-        )
+    response = add_entity(
+        request=request,
+        entity="health_problem",
+        required_fields=["health_record_id", "problem", "date"],
+        optional_fields=["treatment"]
+    )
+    return response
 
 
 @app.route("/health_problems/<int:id>", methods=["PUT"])
 @jwt_required()
 @role_required(["vet", "admin"])
 def update_health_problem(id):
-    try:
-        info = request.get_json()
-
-        if not info or not isinstance(info, dict):
-            return make_response(
-                jsonify({"message": "Invalid JSON input"}), 400
-            )
-
-        fields = []
-        params = []
-        for field, value in info.items():
-            if field in {"health_record_id", "problem", "date", "treatment"}:
-                fields.append(f"{field} = %s")
-                params.append(value)
-
-        if not fields:
-            return make_response(
-                jsonify(
-                    {"message": "at least one field must be provided to update"}), 400
-            )
-
-        params.append(id)
-
-        query = f"UPDATE health_problem SET {', '.join(fields)} WHERE id = %s"
-
-        cur = mysql.connection.cursor()
-        cur.execute(query, tuple(params))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no health problem found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "health problem updated successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred", "error": str(e)}
-            ),
-            500,
-        )
+    response = update_entity(
+        request=request,
+        entity="health_problem",
+        allowed_fields={"health_record_id", "problem", "date", "treatment"},
+        id=id
+    )
+    return response
 
 
 @app.route("/health_problems/<int:id>", methods=["DELETE"])
 @jwt_required()
 @role_required(["admin"])
 def delete_health_problem(id):
-    try:
-        cur = mysql.connection.cursor()
-        cur.execute("""DELETE FROM health_problem WHERE id = %s""", (id,))
-        mysql.connection.commit()
-        rows_affected = cur.rowcount
-        cur.close()
-
-        if rows_affected == 0:
-            return make_response(
-                jsonify({"message": f"no health problem found with ID {id}"}), 404
-            )
-
-        return make_response(
-            jsonify(
-                {"message": "health problem deleted successfully",
-                    "rows_affected": rows_affected}
-            ),
-            200,
-        )
-
-    except mysql.connection.Error as e:
-        return make_response(
-            jsonify(
-                {"message": "database error occurred",
-                    "error": str(e)}
-            ),
-            500,
-        )
-    except Exception as e:
-        return make_response(
-            jsonify(
-                {"message": "an unexpected error occurred.", "error": str(e)}
-            ),
-            500,
-        )
+    response = delete_entity(entity="health_problem", id=id)
+    return response
 
 
 if __name__ == "__main__":
