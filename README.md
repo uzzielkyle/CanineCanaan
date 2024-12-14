@@ -112,9 +112,9 @@ As of now, this project is set up with a Flask API to handle the following opera
 
 | **Method** | **Endpoint** | **Description** | **Roles Required** |
 | --- | --- | --- | --- |
-| POST | /register | Register a new user (provide email, password, and role). | - |
-| POST | /login | Login with credentials (email and password) and receive a JWT token. | - |
-| POST | /logout | Logout the user by revoking the JWT token. | - |
+| POST | auth/register | Register a new user (provide email, password, and role). | - |
+| POST | auth/login | Login with credentials (email and password) and receive a JWT token. | - |
+| POST | auth/logout | Logout the user by revoking the JWT token. | - |
 | GET | /protected | Access a protected route that requires a valid JWT token. | - |
 
 ### Dog CRUD Endpoints
