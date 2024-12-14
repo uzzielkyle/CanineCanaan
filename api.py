@@ -15,6 +15,7 @@ from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from datetime import timedelta, datetime
 from functools import wraps
+from marshmallow import Schema, fields, validate, ValidationError
 import os
 
 load_dotenv(verbose=True, override=True)
@@ -28,6 +29,7 @@ app.config["MYSQL_DB"] = os.getenv("DATABASE")
 app.config["MYSQL_PORT"] = int(os.getenv("PORT"))
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
+
 
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
@@ -106,33 +108,18 @@ def get_entity(query, id):
         )
 
 
-def add_entity(request, entity, required_fields, optional_fields=None):
-    optional_fields = optional_fields or []
-
+def add_entity(request, entity, schema_class):
     try:
-        info = request.get_json()
-        if not info:
-            return make_response(jsonify({"message": "invalid JSON input"}), 400)
+        schema = schema_class()
+        info = schema.load(request.get_json())
 
-        missing_fields = [
-            field for field in required_fields if field not in info]
-        if missing_fields:
-            return make_response(
-                jsonify(
-                    {"message": f"missing required fields: {', '.join(missing_fields)}"}), 400
-            )
-
-        values = {field: info[field] for field in required_fields}
-        for field in optional_fields:
-            values[field] = info.get(field)
-
-        fields = required_fields + optional_fields
+        fields = list(info.keys())
         placeholders = ", ".join(["%s"] * len(fields))
         columns = ", ".join(fields)
         query = f"INSERT INTO {entity} ({columns}) VALUES ({placeholders})"
 
         cur = mysql.connection.cursor()
-        cur.execute(query, [values[field] for field in fields])
+        cur.execute(query, [info[field] for field in fields])
         mysql.connection.commit()
         rows_affected = cur.rowcount
         cur.close()
@@ -147,48 +134,36 @@ def add_entity(request, entity, required_fields, optional_fields=None):
             201,
         )
 
+    except ValidationError as ve:
+        return make_response(
+            jsonify({"message": "validation error", "errors": ve.messages}), 400
+        )
+
     except mysql.connection.Error as e:
         return make_response(
-            jsonify(
-                {
-                    "message": "A database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
+            jsonify({"message": "a database error occurred", "error": str(e)}), 500
         )
 
     except Exception as e:
         return make_response(
-            jsonify(
-                {
-                    "message": "An unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
+            jsonify({"message": "an unexpected error occurred",
+                    "error": str(e)}), 500
         )
 
 
-def update_entity(request, entity, allowed_fields, id):
+def update_entity(request, entity, schema_class, id):
     try:
-        info = request.get_json()
-        if not info or not isinstance(info, dict):
-            return make_response(jsonify({"message": "Invalid JSON input"}), 400)
+        schema = schema_class(partial=True)
+        info = schema.load(request.get_json())
 
-        fields = []
-        params = []
-        for field, value in info.items():
-            if field in allowed_fields:
-                fields.append(f"{field} = %s")
-                params.append(value)
-
-        if not fields:
+        if not info:
             return make_response(
                 jsonify(
-                    {"message": "at least one valid field must be provided to update"}), 400
+                    {"message": "At least one valid field must be provided to update"}), 400
             )
 
+        fields = [f"{field} = %s" for field in info.keys()]
+        params = list(info.values())
         params.append(id)
 
         query = f"UPDATE {entity} SET {', '.join(fields)} WHERE id = %s"
@@ -202,7 +177,8 @@ def update_entity(request, entity, allowed_fields, id):
         if rows_affected == 0:
             return make_response(
                 jsonify(
-                    {"message": f"no {' '.join(str(entity).split('_'))} entry found with ID {id}"}), 404
+                    {"message": f"No {' '.join(str(entity).split('_'))} entry found with ID {id}"}
+                ), 404
             )
 
         return make_response(
@@ -215,26 +191,20 @@ def update_entity(request, entity, allowed_fields, id):
             200,
         )
 
+    except ValidationError as ve:
+        return make_response(
+            jsonify({"message": "Validation error", "errors": ve.messages}), 400
+        )
+
     except mysql.connection.Error as e:
         return make_response(
-            jsonify(
-                {
-                    "message": "a database error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
+            jsonify({"message": "A database error occurred", "error": str(e)}), 500
         )
 
     except Exception as e:
         return make_response(
-            jsonify(
-                {
-                    "message": "an unexpected error occurred",
-                    "error": str(e),
-                }
-            ),
-            500,
+            jsonify({"message": "An unexpected error occurred",
+                    "error": str(e)}), 500
         )
 
 
@@ -517,9 +487,20 @@ def role_required(allowed_roles):
     return wrapper
 
 
-################
-### DOG CRUD ###
-################
+###########
+### DOG ###
+###########
+class DogSchema(Schema):
+    id = fields.Int(dump_only=True)
+    litter_id = fields.Int(allow_none=True)
+    name = fields.Str(required=True, validate=validate.Length(min=1))
+    gender = fields.Int(
+        required=True,
+        validate=validate.OneOf([0, 1])
+    )
+    breed = fields.Str(required=True, validate=validate.Length(min=1))
+
+
 @app.route("/dogs", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
@@ -546,8 +527,7 @@ def add_dog():
     response = add_entity(
         request=request,
         entity="dog",
-        required_fields=["name", "gender", "breed"],
-        optional_fields=["litter_id"]
+        schema_class=DogSchema
     )
     return response
 
@@ -559,7 +539,7 @@ def update_dog(id):
     response = update_entity(
         request=request,
         entity="dog",
-        allowed_fields={"name", "litter_id", "gender", "breed"},
+        schema_class=DogSchema,
         id=id
     )
     return response
@@ -573,9 +553,19 @@ def delete_dog(id):
     return response
 
 
-################
-### VET CRUD ###
-################
+###########
+### VET ###
+###########
+class VetSchema(Schema):
+    id = fields.Int(dump_only=True)
+    firstname = fields.Str(
+        required=True, validate=validate.Length(min=1, max=45))
+    lastname = fields.Str(
+        required=True, validate=validate.Length(min=1, max=45))
+    email = fields.Email(allow_none=True, validate=validate.Length(max=45))
+    phone = fields.Str(allow_none=True, validate=validate.Length(max=45))
+
+
 @app.route("/vets", methods=["GET"])
 @jwt_required()
 @role_required(["breeder", "admin"])
@@ -602,8 +592,7 @@ def add_vet():
     response = add_entity(
         request=request,
         entity="vet",
-        required_fields=["firstname", "lastname"],
-        optional_fields=["email", "phone"]
+        schema_class=VetSchema
     )
     return response
 
@@ -615,7 +604,7 @@ def update_vet(id):
     response = update_entity(
         request=request,
         entity="vet",
-        allowed_fields={"firstname", "lastname", "email", "phone"},
+        schema_class=VetSchema,
         id=id
     )
     return response
@@ -629,9 +618,15 @@ def delete_vet(id):
     return response
 
 
-##########################
-### HEALTH RECORD CRUD ###
-##########################
+#####################
+### HEALTH RECORD ###
+#####################
+class HealthRecordSchema(Schema):
+    id = fields.Int(dump_only=True)
+    dog_id = fields.Int(required=True)
+    vet_id = fields.Int(required=True)
+
+
 @app.route("/health_records", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
@@ -679,7 +674,7 @@ def add_health_record():
     response = add_entity(
         request=request,
         entity="health_record",
-        required_fields=["dog_id", "vet_id"],
+        schema_class=HealthRecordSchema
     )
     return response
 
@@ -691,7 +686,7 @@ def update_health_record(id):
     response = update_entity(
         request=request,
         entity="health_record",
-        allowed_fields={"vet_id", "dog_id"},
+        schema_class=HealthRecordSchema,
         id=id
     )
     return response
@@ -705,9 +700,18 @@ def delete_health_record(id):
     return response
 
 
-###################
-### LITTER CRUD ###
-###################
+##############
+### LITTER ###
+##############
+class LitterSchema(Schema):
+    id = fields.Int(dump_only=True)
+    sire_id = fields.Int(required=True)
+    dam_id = fields.Int(required=True)
+    birthdate = fields.Date(required=True)
+    birthplace = fields.Str(
+        required=True, validate=validate.Length(min=1, max=135))
+
+
 @app.route("/litters", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "admin"])
@@ -761,7 +765,7 @@ def add_litter():
     response = add_entity(
         request=request,
         entity="litter",
-        required_fields=["sire_id", "dam_id", "birthdate", "birthplace"]
+        schema_class=LitterSchema
     )
     return response
 
@@ -773,7 +777,7 @@ def update_litter(id):
     response = update_entity(
         request=request,
         entity="litter",
-        allowed_fields={"sire_id", "dam_id", "birthdate", "birthplace"},
+        schema_class=LitterSchema,
         id=id
     )
     return response
@@ -787,9 +791,18 @@ def delete_litter(id):
     return response
 
 
-###########################
-### HEALTH PROBLEM CRUD ###
-###########################
+######################
+### HEALTH PROBLEM ###
+######################
+class HealthProblemSchema(Schema):
+    id = fields.Int(dump_only=True)
+    health_record_id = fields.Int(required=True)
+    problem = fields.Str(
+        required=True, validate=validate.Length(min=1, max=135))
+    date = fields.Date(required=True)
+    treatment = fields.Str(allow_none=True, validate=validate.Length(max=135))
+
+
 @app.route("/health_problems", methods=["GET"])
 @jwt_required()
 @role_required(["buyer", "breeder", "vet", "admin"])
@@ -846,8 +859,7 @@ def add_health_problem():
     response = add_entity(
         request=request,
         entity="health_problem",
-        required_fields=["health_record_id", "problem", "date"],
-        optional_fields=["treatment"]
+        schema_class=HealthProblemSchema
     )
     return response
 
@@ -859,7 +871,7 @@ def update_health_problem(id):
     response = update_entity(
         request=request,
         entity="health_problem",
-        allowed_fields={"health_record_id", "problem", "date", "treatment"},
+        schema_class=HealthProblemSchema,
         id=id
     )
     return response
