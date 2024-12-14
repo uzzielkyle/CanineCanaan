@@ -324,7 +324,7 @@ def index():
 ############
 ### AUTH ###
 ############
-@app.route("auth/register", methods=["POST"])
+@app.route("/auth/register", methods=["POST"])
 def register():
     email = request.json.get("email", None)
     password = request.json.get("password", None)
@@ -386,7 +386,7 @@ def register():
         )
 
 
-@app.route("auth/login", methods=["POST"])
+@app.route("/auth/login", methods=["POST"])
 def login():
     email = request.json.get("email", None)
     password = request.json.get("password", None)
@@ -436,7 +436,7 @@ def login():
         )
 
 
-@app.route("auth/logout", methods=["POST"])
+@app.route("/auth/logout", methods=["POST"])
 @jwt_required()
 def logout():
     try:

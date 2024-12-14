@@ -62,7 +62,7 @@ def test_register_success(client):
     setup_mock_db(mock_mysql, rowcount=1)
 
     response = client.post(
-        "/register",
+        "/auth/register",
         json={"email": "test@example.com",
               "password": "password123", "role": "admin"},
     )
@@ -83,7 +83,7 @@ def test_login_success(client):
     ])
 
     response = client.post(
-        "/login",
+        "/auth/login",
         json={"email": "test@example.com", "password": "password123"},
     )
 
