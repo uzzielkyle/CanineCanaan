@@ -257,47 +257,47 @@ def delete_entity(entity, id):
 #####################
 @app.errorhandler(Exception)
 def handle_exception(e):
-    return make_response(jsonify({"message": "An unexpected error occurred."}), 500)
+    return make_response(jsonify({"message": "an unexpected error occurred.", "error": str(e)}), 500)
 
 
 @app.errorhandler(NoAuthorizationError)
 def handle_no_authorization_error(e):
-    return make_response(jsonify({"message": "Authorization token is missing. Please include it in the header."}), 401)
+    return make_response(jsonify({"message": "authorization token is missing. Please include it in the header.", "error": str(e)}), 401)
 
 
 @app.errorhandler(InvalidHeaderError)
 def handle_invalid_header_error(e):
-    return make_response(jsonify({"message": "Invalid authorization header format. Ensure it's in the form 'Bearer <token>'."}), 401)
+    return make_response(jsonify({"message": "invalid authorization header format. Ensure it's in the form 'Bearer <token>'.", "error": str(e)}), 401)
 
 
 @app.errorhandler(JWTDecodeError)
 def handle_jwt_decode_error(e):
-    return make_response(jsonify({"message": "Error decoding token. The token may be malformed."}), 401)
+    return make_response(jsonify({"message": "error decoding token. The token may be malformed.", "error": str(e)}), 401)
 
 
 @app.errorhandler(RevokedTokenError)
 def handle_revoked_token_error(e):
-    return make_response(jsonify({"message": "Token has been revoked. Please log in again."}), 401)
+    return make_response(jsonify({"message": "token has been revoked. Please log in again.", "error": str(e)}), 401)
 
 
 @app.errorhandler(WrongTokenError)
 def handle_wrong_token_error(e):
-    return make_response(jsonify({"message": "Wrong token type used. Ensure you're using the correct token type."}), 401)
+    return make_response(jsonify({"message": "wrong token type used. Ensure you're using the correct token type.", "error": str(e)}), 401)
 
 
 @app.errorhandler(FreshTokenRequired)
 def handle_fresh_token_required_error(e):
-    return make_response(jsonify({"message": "Fresh token is required to access this resource."}), 401)
+    return make_response(jsonify({"message": "fresh token is required to access this resource.", "error": str(e)}), 401)
 
 
 @app.errorhandler(UserLookupError)
 def handle_user_lookup_error(e):
-    return make_response(jsonify({"message": "User not found. Please verify your credentials."}), 404)
+    return make_response(jsonify({"message": "user not found. Please verify your credentials.", "error": str(e)}), 404)
 
 
 @app.errorhandler(UserClaimsVerificationError)
 def handle_user_claims_error(e):
-    return make_response(jsonify({"message": "User claims verification failed. Please contact support."}), 401)
+    return make_response(jsonify({"message": "user claims verification failed. Please contact support.", "error": str(e)}), 401)
 
 
 @jwt.expired_token_loader
