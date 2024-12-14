@@ -108,15 +108,65 @@ API Endpoints
 
 As of now, this project is set up with a Flask API to handle the following operations:
 
--   **GET /dogs**: Fetch all dogs.
--   **POST /dogs**: Add a new dog to the database.
--   **GET /dogs/<dog_id>**: Get details for a specific dog.
--   **GET /vets**: Get all vets.
--   **POST /vets**: Add a new vet.
--   **GET /health-problems**: Get all health problems.
--   **POST /health-problems**: Add a new health problem.
+### Authentication Endpoints
 
-These are just the basic endpoints that can be expanded to handle more specific features such as updating records, deleting entries, etc.
+| **Method** | **Endpoint** | **Description** | **Roles Required** |
+| --- | --- | --- | --- |
+| POST | /register/ | Register a new user (provide email, password, and role). | - |
+| POST | /login/ | Login with credentials (email and password) and receive a JWT token. | - |
+| POST | /logout/ | Logout the user by revoking the JWT token. | - |
+| GET | /protected/ | Access a protected route that requires a valid JWT token. | - |
+
+### Dog CRUD Endpoints
+
+| **Method** | **Endpoint** | **Description** | **Roles Required** |
+| --- | --- | --- | --- |
+| GET | /dogs | Fetch all dogs. | `buyer`, `breeder`, `vet`, `admin` |
+| GET | /dogs/<int:id> | Fetch details of a specific dog by ID. | `buyer`, `breeder`, `vet`, `admin` |
+| POST | /dogs | Add a new dog to the database. | `admin`, `breeder` |
+| PUT | /dogs/<int:id> | Update details of a specific dog by ID. | `admin`, `breeder` |
+| DELETE | /dogs/<int:id> | Delete a dog by ID. | `admin` |
+
+### Vet CRUD Endpoints
+
+| **Method** | **Endpoint** | **Description** | **Roles Required** |
+| --- | --- | --- | --- |
+| GET | /vets | Fetch all vets. | `breeder`, `admin` |
+| GET | /vets/<int:id> | Fetch details of a specific vet by ID. | `breeder`, `admin` |
+| POST | /vets | Add a new vet to the database. | `admin` |
+| PUT | /vets/<int:id> | Update details of a specific vet by ID. | `admin` |
+| DELETE | /vets/<int:id> | Delete a vet by ID. | `admin` |
+
+### Health Record CRUD Endpoints
+
+| **Method** | **Endpoint** | **Description** | **Roles Required** |
+| --- | --- | --- | --- |
+| GET | /health_records | Fetch all health records. | `buyer`, `breeder`, `vet`, `admin` |
+| GET | /health_records/<int:id> | Fetch details of a specific health record by ID. | `buyer`, `breeder`, `vet`, `admin` |
+| POST | /health_records | Add a new health record. | `breeder`, `vet`, `admin` |
+| PUT | /health_records/<int:id> | Update details of a specific health record by ID. | `breeder`, `vet`, `admin` |
+| DELETE | /health_records/<int:id> | Delete a health record by ID. | `admin` |
+
+### Litter CRUD Endpoints
+
+| **Method** | **Endpoint** | **Description** | **Roles Required** |
+| --- | --- | --- | --- |
+| GET | /litters | Fetch all litters. | `buyer`, `breeder`, `admin` |
+| GET | /litters/<int:id> | Fetch details of a specific litter by ID. | `buyer`, `breeder`, `admin` |
+| POST | /litters | Add a new litter. | `breeder`, `admin` |
+| PUT | /litters/<int:id> | Update details of a specific litter by ID. | `breeder`, `admin` |
+| DELETE | /litters/<int:id> | Delete a litter by ID. | `admin` |
+
+### Health Problem CRUD Endpoints
+
+| **Method** | **Endpoint** | **Description** | **Roles Required** |
+| --- | --- | --- | --- |
+| GET | /health_problems | Fetch all health problems. | `buyer`, `breeder`, `vet`, `admin` |
+| GET | /health_problems/<int:id> | Fetch details of a specific health problem by ID. | `buyer`, `breeder`, `vet`, `admin` |
+| POST | /health_problems | Add a new health problem. | `vet`, `admin` |
+| PUT | /health_problems/<int:id> | Update details of a specific health problem by ID. | `vet`, `admin` |
+| DELETE | /health_problems/<int:id> | Delete a health problem by ID. | `admin` |
+
 
 Troubleshooting
 ---------------
