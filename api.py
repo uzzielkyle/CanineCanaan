@@ -30,7 +30,6 @@ app.config["MYSQL_PORT"] = int(os.getenv("PORT"))
 app.config["MYSQL_CURSORCLASS"] = "DictCursor"
 mysql = MySQL(app)
 
-
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=24)
 jwt = JWTManager(app)
@@ -38,6 +37,9 @@ jwt = JWTManager(app)
 bcrypt = Bcrypt(app)
 
 
+###################
+### DB FUNCTION ###
+###################
 def data_fetch(query, params=None):
     try:
         cur = mysql.connection.cursor()
@@ -58,6 +60,9 @@ def data_fetch(query, params=None):
         cur.close()
 
 
+##############################
+### GENERIC CRUD FUNCTIONS ###
+##############################
 def get_entities(query):
     try:
         data = data_fetch(query=query)
@@ -248,7 +253,7 @@ def delete_entity(entity, id):
 
 
 ######################
-### ERROR HANDLER ###
+### ERROR HANDLERS ###
 #####################
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -303,6 +308,9 @@ def expired_token_callback(jwt_header, jwt_payload):
     )
 
 
+##############
+### ROUTES ###
+##############
 @app.route("/")
 def index():
     return make_response(
@@ -487,9 +495,9 @@ def role_required(allowed_roles):
     return wrapper
 
 
-###########
-### DOG ###
-###########
+################
+### DOG CRUD ###
+################
 class DogSchema(Schema):
     id = fields.Int(dump_only=True)
     litter_id = fields.Int(allow_none=True)
@@ -553,9 +561,9 @@ def delete_dog(id):
     return response
 
 
-###########
-### VET ###
-###########
+################
+### VET CRUD ###
+################
 class VetSchema(Schema):
     id = fields.Int(dump_only=True)
     firstname = fields.Str(
@@ -618,9 +626,9 @@ def delete_vet(id):
     return response
 
 
-#####################
-### HEALTH RECORD ###
-#####################
+##########################
+### HEALTH RECORD CRUD ###
+##########################
 class HealthRecordSchema(Schema):
     id = fields.Int(dump_only=True)
     dog_id = fields.Int(required=True)
@@ -700,9 +708,9 @@ def delete_health_record(id):
     return response
 
 
-##############
-### LITTER ###
-##############
+###################
+### LITTER CRUD ###
+###################
 class LitterSchema(Schema):
     id = fields.Int(dump_only=True)
     sire_id = fields.Int(required=True)
@@ -791,9 +799,9 @@ def delete_litter(id):
     return response
 
 
-######################
-### HEALTH PROBLEM ###
-######################
+###########################
+### HEALTH PROBLEM CRUD ###
+###########################
 class HealthProblemSchema(Schema):
     id = fields.Int(dump_only=True)
     health_record_id = fields.Int(required=True)
